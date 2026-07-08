@@ -307,27 +307,32 @@
         }
 
         // Vérification furtive en arrière-plan sans perturber l'interface
-        async function checkRewardOnlyInBackground() {
-            if (!currentSessionUser || currentSessionUser === 'admin') return; 
+async function checkRewardOnlyInBackground() {
+    // SÉCURITÉ ABSOLUE : Si tu es ADMIN ou déconnecté, la boucle s'arrête net !
+    // Cela t'empêche de recevoir l'ancien Sheets pendant que tu crées des tâches ou des joueurs
+    if (!currentSessionUser || currentSessionUser === 'admin') return; 
+    
+    try {
+        let res = await fetch(GOOGLE_SCRIPT_URL);
+        let freshState = await res.json();
+        
+        if (freshState.userData && freshState.userData[currentSessionUser]) {
+            const freshUser = freshState.userData[currentSessionUser];
             
-            try {
-                let res = await fetch(GOOGLE_SCRIPT_URL);
-                let freshState = await res.json();
-                
-                if (freshState.userData && freshState.userData[currentSessionUser]) {
-                    const freshUser = freshState.userData[currentSessionUser];
-                    appState.userData[currentSessionUser] = freshUser; 
-                    
-                    if (freshUser.pendingReward && document.getElementById('reward-modal').classList.contains('hidden')) {
-                        appState = freshState; 
-                        triggerBrawlStarsReward(freshUser.pendingReward);
-                    }
-                }
-                document.getElementById('cloud-sync-status').innerText = "Vérification tâche ✔";
-            } catch(e) {
-                console.log("Erreur lors de la vérification furtive arrière-plan.");
+            // On met uniquement à jour le profil de l'enfant en mémoire, pas le reste de la map
+            appState.userData[currentSessionUser] = freshUser; 
+            
+            // Si une récompense attend et que le pop-up n'est pas ouvert : on bloque tout et on affiche
+            if (freshUser.pendingReward && document.getElementById('reward-modal').classList.contains('hidden')) {
+                appState = freshState; // On synchronise l'état complet juste pour la récompense
+                triggerBrawlStarsReward(freshUser.pendingReward);
             }
         }
+        document.getElementById('cloud-sync-status').innerText = "Vérification tâche ✔";
+    } catch(e) {
+        console.log("Erreur lors de la vérification furtive arrière-plan.");
+    }
+}
 
         async function pushToCloud() {
             document.getElementById('cloud-sync-status').innerText = "Sauvegarde Cloud... ☁";
@@ -369,35 +374,41 @@
             };
         }
 
-        function submitLogin() {
-            const user = document.getElementById('login-user-select').value;
-            if(!user) return;
+function submitLogin() {
+    const user = document.getElementById('login-user-select').value;
+    if(!user) return;
 
-            if(user === 'admin') {
-                const pass = document.getElementById('login-admin-pass').value;
-                if(pass === 'admin') {
-                    currentSessionUser = 'admin';
-                    document.getElementById('login-screen').classList.add('hidden');
-                    activateAdminInterface(true);
-                } else {
-                    alert("Mot de passe incorrect !");
-                    return;
-                }
-            } else {
-                currentSessionUser = user;
-                document.getElementById('login-screen').classList.add('hidden');
-                activateAdminInterface(false);
-            }
-
-            document.getElementById('current-session-name').innerText = currentSessionUser === 'admin' ? "👑 Administrateur" : currentSessionUser;
-            changeActiveUserView();
+    if(user === 'admin') {
+        const pass = document.getElementById('login-admin-pass').value;
+        if(pass === 'admin') {
+            currentSessionUser = 'admin';
+            document.getElementById('login-screen').classList.add('hidden');
+            activateAdminInterface(true);
+            
+            // SÉCURITÉ : On force un téléchargement propre et unique pour l'admin
+            fetchFromCloud(); 
+        } else {
+            alert("Mot de passe incorrect !");
+            return;
         }
+    } else {
+        currentSessionUser = user;
+        document.getElementById('login-screen').classList.add('hidden');
+        activateAdminInterface(false);
+    }
 
-        function logoutSession() {
-            currentSessionUser = null;
-            document.getElementById('login-admin-pass').value = '';
-            document.getElementById('login-screen').classList.remove('hidden');
-        }
+    document.getElementById('current-session-name').innerText = currentSessionUser === 'admin' ? "👑 Administrateur" : currentSessionUser;
+    changeActiveUserView();
+}
+
+function logoutSession() {
+    currentSessionUser = null;
+    document.getElementById('login-admin-pass').value = '';
+    document.getElementById('login-screen').classList.remove('hidden');
+    
+    // On re-déclenche un fetch propre pour nettoyer la mémoire à l'accueil
+    fetchFromCloud();
+}
 
         function activateAdminInterface(isAdmin) {
             const adminElements = ['admin-add-room-btn', 'admin-members-btn', 'admin-delete-room-btn', 'add-task-form', 'room-name-wrapper', 'admin-clear-done-btn'];
