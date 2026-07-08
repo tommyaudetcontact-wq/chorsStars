@@ -690,14 +690,22 @@
             document.getElementById('reward-modal').classList.remove('hidden');
         }
 
-        function clearPendingReward() {
-            document.getElementById('reward-modal').classList.add('hidden');
-            if (currentSessionUser && currentSessionUser !== 'admin') {
-                appState.userData[currentSessionUser].pendingReward = null;
-                pushToCloud();
-                changeActiveUserView();
-            }
-        }
+function clearPendingReward() {
+    // 1. On cache immédiatement le modal pour que ça disparaisse visuellement
+    document.getElementById('reward-modal').classList.add('hidden');
+    
+    // 2. Si on est un joueur connecté, on vide la récompense en mémoire locale ET sur le Cloud
+    if (currentSessionUser && currentSessionUser !== 'admin') {
+        appState.userData[currentSessionUser].pendingReward = null;
+        
+        // IMPORTANT : On pousse immédiatement la modification vers le Google Sheets 
+        // pour effacer la colonne "RecompenseAttente" avant le prochain refresh de 10s
+        pushToCloud();
+        
+        // Met à jour l'album et la barre d'XP
+        changeActiveUserView();
+    }
+}
 
         function addTask() {
             if(currentSessionUser !== 'admin') return;
