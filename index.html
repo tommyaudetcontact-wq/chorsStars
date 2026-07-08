@@ -264,7 +264,9 @@
             { id: "p7", name: "Ectoplasma", img: "https://images.pokemontcg.io/swsh8/157_hires.png" }
         ];
 
-        // --- ☁ SYNC ENGINES ☁ ---
+        // --- ☁ ENGINS DE SYNCHRONISATION ☁ ---
+
+        // Appel initial obligatoire : Charge tout et remplit la liste d'accueil immédiatement
         async function fetchFromCloud() {
             try {
                 let res = await fetch(GOOGLE_SCRIPT_URL);
@@ -273,9 +275,11 @@
                 if(document.getElementById('login-sync-status-txt')) {
                     document.getElementById('login-sync-status-txt').classList.add('hidden');
                 }
-                document.getElementById('cloud-sync-status').innerText = "A jour ✔";
+                document.getElementById('cloud-sync-status').innerText = "À jour ✔";
                 
                 appState.users.forEach(initUserIfNeeded);
+                
+                // On force le remplissage de l'accueil ici
                 populateLoginDropdown();
                 
                 if (currentSessionUser && currentSessionUser !== 'admin') {
@@ -286,7 +290,6 @@
                     document.getElementById('user-wallet').innerText = `$${u.wallet}`;
                     renderCollectionAlbum();
                     
-                    // VALIDATION EN DIRECT : S'affiche immédiatement s'il y a une quête approuvée sur le Cloud
                     if (u.pendingReward && document.getElementById('reward-modal').classList.contains('hidden')) {
                         triggerBrawlStarsReward(u.pendingReward);
                     }
@@ -303,6 +306,29 @@
             }
         }
 
+        // Vérification furtive en arrière-plan sans perturber l'interface
+        async function checkRewardOnlyInBackground() {
+            if (!currentSessionUser || currentSessionUser === 'admin') return; 
+            
+            try {
+                let res = await fetch(GOOGLE_SCRIPT_URL);
+                let freshState = await res.json();
+                
+                if (freshState.userData && freshState.userData[currentSessionUser]) {
+                    const freshUser = freshState.userData[currentSessionUser];
+                    appState.userData[currentSessionUser] = freshUser; 
+                    
+                    if (freshUser.pendingReward && document.getElementById('reward-modal').classList.contains('hidden')) {
+                        appState = freshState; 
+                        triggerBrawlStarsReward(freshUser.pendingReward);
+                    }
+                }
+                document.getElementById('cloud-sync-status').innerText = "Vérification tâche ✔";
+            } catch(e) {
+                console.log("Erreur lors de la vérification furtive arrière-plan.");
+            }
+        }
+
         async function pushToCloud() {
             document.getElementById('cloud-sync-status').innerText = "Sauvegarde Cloud... ☁";
             try {
@@ -313,7 +339,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(appState)
                 });
-                document.getElementById('cloud-sync-status').innerText = "A jour ✔";
+                document.getElementById('cloud-sync-status').innerText = "À jour ✔";
             } catch(e) {
                 document.getElementById('cloud-sync-status').innerText = "Erreur de sauvegarde ❌";
             }
@@ -328,8 +354,10 @@
         // --- LOGIN ENGINE ---
         function populateLoginDropdown() {
             const select = document.getElementById('login-user-select');
+            if(!select) return;
             const currentSelectedValue = select.value;
-            select.innerHTML = '<option value="">-- Sélectionner --</option>';
+            
+            select.innerHTML = '<option value="">-- Sélectionner un héros --</option>';
             appState.users.forEach(u => select.innerHTML += `<option value="${u}">👤 ${u}</option>`);
             select.innerHTML += '<option value="admin">👑 ADMIN (Parents)</option>';
             
@@ -433,7 +461,7 @@
         }
         function closeLeaderboard() { document.getElementById('leaderboard-modal').classList.add('hidden'); }
 
-        // --- ENGIN DE COMPARAISON DES COLLECTIONS ---
+        // --- COMPARAISON DES PACKS POKÉMON ---
         function openComparison(targetUser) {
             if (!currentSessionUser || currentSessionUser === 'admin') return;
             
@@ -463,7 +491,7 @@
         }
         function closeCompareModal() { document.getElementById('compare-modal').classList.add('hidden'); }
 
-        // --- LOGIQUE PIÈCES ET QUÊTES ---
+        // --- PIÈCES ET ZONE DE DRAG & SNAP ---
         function renderFloorplan() {
             const container = document.getElementById('floorplan');
             container.innerHTML = '';
@@ -577,7 +605,7 @@
             });
         }
 
-        // --- FILTRAGE DE SÉCURITÉ CONTRE LES DOUBLONS ---
+        // --- ATTRIBUTION DES PRIX & FILTRE ANTI-DOUBLON ---
         function toggleTaskDone(roomId, taskIndex) {
             if(currentSessionUser !== 'admin') return;
             const room = appState.rooms.find(r => r.id === roomId);
@@ -599,20 +627,16 @@
                     isLevelUp = true;
                     
                     if (!u.pokemonCards) u.pokemonCards = [];
-                    
-                    // Sécurité anti-doublon : On liste les identifiants déjà possédés
                     const ownedIds = u.pokemonCards.map(c => c.id);
                     
-                    // On filtre le pool principal pour ne retenir que les cartes manquantes
+                    // Sécurité anti-doublon absolue
                     const availableCards = POKEMON_POOL.filter(c => !ownedIds.includes(c.id));
 
                     if (availableCards.length > 0) {
                         rolledCard = availableCards[Math.floor(Math.random() * availableCards.length)];
                     } else {
-                        // Si le joueur possède absolument TOUT l'album, on réinitialise pour lui permettre de dupliquer
                         rolledCard = POKEMON_POOL[Math.floor(Math.random() * POKEMON_POOL.length)];
                     }
-                    
                     u.pokemonCards.push(rolledCard);
                 }
 
@@ -629,6 +653,7 @@
             selectRoom(roomId);
         }
 
+        // Nettoyage complet de l'historique
         function clearDoneTasks() {
             if(currentSessionUser !== 'admin' || !selectedRoomId) return;
             const room = appState.rooms.find(r => r.id === selectedRoomId);
@@ -742,29 +767,71 @@
 
         function openUserModal() { document.getElementById('user-modal').classList.remove('hidden'); renderModalUsers(); }
         function closeUserModal() { document.getElementById('user-modal').classList.add('hidden'); }
-        function renderModalUsers() {
-            const list = document.getElementById('modal-users-list');
-            list.innerHTML = appState.users.map(u => `
-                <div class="bg-slate-900 p-2 rounded-xl flex justify-between items-center text-sm font-bold border border-slate-700">
-                    <span>${u}</span>
-                    <button onclick="deleteUser('${u}')" class="text-red-500">Effacer</button>
-                </div>
-            `).join('');
+function renderModalUsers() {
+    const list = document.getElementById('modal-users-list');
+    if (!list) return;
+    list.innerHTML = appState.users.map(u => `
+        <div class="bg-slate-900 p-2 rounded-xl flex justify-between items-center text-sm font-bold border border-slate-700">
+            <span>👤 ${u}</span>
+            <button onclick="deleteUser('${u}')" class="text-red-500 font-bold hover:text-red-400 cursor-pointer">Effacer</button>
+        </div>
+    `).join('') || '<p class="text-xs text-slate-500 text-center py-2">Aucun joueur dans l\'équipe.</p>';
+}
+function saveUserFromModal() {
+    const nameInput = document.getElementById('modal-user-name');
+    const name = nameInput.value.trim();
+    
+    if (!name) return;
+    if (appState.users.includes(name)) {
+        alert("Ce héros existe déjà !");
+        return;
+    }
+    
+    // 1. On l'ajoute immédiatement dans la mémoire locale (Instantané)
+    appState.users.push(name); 
+    initUserIfNeeded(name);
+    
+    // 2. On force la mise à jour des menus (Sélection de connexion + Attribution des tâches)
+    populateLoginDropdown(); 
+    if (selectedRoomId) {
+        selectRoom(selectedRoomId); // Rafraîchit le menu déroulant des tâches de la pièce active
+    }
+    
+    // 3. On met à jour l'affichage de la fenêtre des membres
+    renderModalUsers();
+    
+    // 4. On envoie la sauvegarde au Sheets en arrière-plan sans bloquer l'interface
+    pushToCloud(); 
+    
+    // Nettoyage de la case de texte
+    nameInput.value = '';
+}
+function deleteUser(name) {
+    if (confirm(`Voulez-vous vraiment supprimer le héros ${name} ?`)) {
+        // 1. Retrait immédiat en local
+        appState.users = appState.users.filter(u => u !== name);
+        if (appState.userData[name]) {
+            delete appState.userData[name];
         }
-        function saveUserFromModal() {
-            const name = document.getElementById('modal-user-name').value.trim();
-            if(!name || appState.users.includes(name)) return;
-            appState.users.push(name); initUserIfNeeded(name);
-            pushToCloud(); fetchFromCloud(); renderModalUsers();
-            document.getElementById('modal-user-name').value = '';
+        
+        // 2. Rafraîchissement instantané des menus
+        populateLoginDropdown();
+        if (selectedRoomId) {
+            selectRoom(selectedRoomId);
         }
-        function deleteUser(name) {
-            appState.users = appState.users.filter(u => u !== name);
-            delete appState.userData[name]; pushToCloud(); fetchFromCloud(); renderModalUsers();
-        }
+        
+        renderModalUsers();
+        
+        // 3. Sauvegarde sur le cloud
+        pushToCloud();
+    }
+}
 
+        // DÉMARRAGE DIRECT DE LA SYNCHRONISATION INITIALE
         fetchFromCloud();
-        setInterval(fetchFromCloud, 10000);
+
+        // BOUCLE FURTIVE POUR LES PACKS RÉCOMPENSES DES ENFANTS
+        setInterval(checkRewardOnlyInBackground, 10000);
     </script>
 </body>
 </html>
