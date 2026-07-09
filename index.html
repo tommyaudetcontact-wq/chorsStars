@@ -81,9 +81,14 @@
         .pokemon-card-wrapper {
             background: #111;
             padding: 6px; border: 4px solid #000; border-radius: 16px; box-shadow: 0 6px 0 #000;
-            transition: transform 0.2s; display: inline-block; width: 100%;
+            transition: transform 0.2s; display: inline-block; width: 100%; cursor: pointer;
         }
         .pokemon-card-wrapper:hover { transform: scale(1.05) rotate(1deg); }
+        .pokemon-card-wrapper.selected {
+            border-color: var(--brawl-yellow) !important;
+            box-shadow: 0px 0px 20px var(--brawl-yellow) !important;
+            transform: scale(1.03) translateY(-4px);
+        }
         .pokemon-card-img { width: 100%; height: auto; border-radius: 10px; display: block; }
         
         .pokemon-modal .modal-content {
@@ -105,6 +110,15 @@
         .badge-money { background-color: var(--brawl-green); }
         .nav-tabs .nav-link { color: #fff; font-family: 'Luckiest Guy', cursive; font-size: 1.2rem; border: 4px solid transparent;}
         .nav-tabs .nav-link.active { background-color: var(--brawl-orange) !important; border: 4px solid #000 !important; border-bottom: transparent!important; border-radius: 15px 15px 0 0; }
+        
+        .trade-zone {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 20px;
+            border: 3px dashed rgba(255, 255, 255, 0.2);
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+        }
     </style>
 </head>
 <body>
@@ -151,7 +165,7 @@
         <ul class="nav nav-tabs border-0 mb-4" id="appTabs">
             <li class="nav-item"><button class="nav-link active" id="taches-tab" data-bs-toggle="tab" data-bs-target="#tachesTab">À Faire</button></li>
             <li class="nav-item"><button class="nav-link" id="collection-tab" data-bs-toggle="tab" data-bs-target="#collectionTab" onclick="fetchCollectionEtEchanges()">Ma Collection</button></li>
-            <li class="nav-item"><button class="nav-link" id="echanges-tab" data-bs-toggle="tab" data-bs-target="#echangesTab">Échanges</button></li>
+            <li class="nav-item"><button class="nav-link" id="echanges-tab" data-bs-toggle="tab" data-bs-target="#echangesTab" onclick="initArenaEchanges()">Arène d'Échanges</button></li>
             <li class="nav-item"><button class="nav-link" id="admin-tab" data-bs-toggle="tab" data-bs-target="#adminTab" style="background-color: var(--brawl-purple);">Parents (Admin)</button></li>
         </ul>
 
@@ -159,25 +173,37 @@
             <div class="tab-pane fade show active" id="tachesTab"><div id="tachesList" class="row g-3"></div></div>
             <div class="tab-pane fade" id="collectionTab"><div id="pokemonGrid" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-4"></div></div>
 
-            <!-- ONGLET ÉCHANGES -->
+            <!-- ARÈNE D'ÉCHANGES -->
             <div class="tab-pane fade" id="echangesTab">
                 <div class="brawl-card p-4">
-                    <h3 class="brawl-font text-warning mb-3">Proposer un échange 1 vs 1</h3>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Échanger avec :</label>
-                            <select id="tradeTargetSelect" class="form-select bg-dark text-white border-secondary"></select>
+                    <h3 class="brawl-font text-warning mb-3">🔥 LE DUEL DE CARTES COIN POKÉMON</h3>
+                    <div class="row g-3 align-items-center bg-dark/40 p-3 rounded-4 border border-secondary mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-info">1. Choisis le partenaire de transaction :</label>
+                            <select id="tradeTargetSelect" class="form-select bg-dark text-white border-secondary" onchange="loadPartnerCollectionForTrade()"></select>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Offrir ma carte :</label>
-                            <select id="tradeMyCardSelect" class="form-select bg-dark text-white border-secondary"></select>
-                        </div>
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button onclick="proposerEchange()" class="btn brawl-btn btn-blue w-100">Envoyer le Deal !</button>
+                        <div class="col-md-6 text-end">
+                            <button onclick="proposerEchange()" class="btn brawl-btn btn-blue py-2 px-4 w-100">🚀 ENVOYER L'OFFRE !</button>
                         </div>
                     </div>
+
+                    <div class="row g-4">
+                        <!-- Ma collection -->
+                        <div class="col-md-6">
+                            <h4 class="brawl-font text-center text-success mb-2">MES CARTES (À OFFRIR)</h4>
+                            <div id="myTradeZone" class="row row-cols-2 row-cols-lg-3 g-2 trade-zone"></div>
+                        </div>
+                        <!-- Sa collection -->
+                        <div class="col-md-6">
+                            <h4 class="brawl-font text-center text-danger mb-2">SES CARTES (À RECEVOIR)</h4>
+                            <div id="partnerTradeZone" class="row row-cols-2 row-cols-lg-3 g-2 trade-zone">
+                                <div class="col-12 text-center text-muted py-5">Sélectionne un ami en haut pour scanner ses cartes.</div>
+                            </div>
+                        </div>
+                    </div>
+
                     <hr class="border-secondary my-4">
-                    <h4 class="brawl-font text-info">Requêtes d'échanges</h4>
+                    <h4 class="brawl-font text-info">Transactions En Attente ou Terminées</h4>
                     <div id="echangesList" class="mt-3"></div>
                 </div>
             </div>
@@ -243,6 +269,9 @@
 
         let currentUser = null, userRole = null, currentLocalState = -1, idMembreSession = null;
         let pendingCards = [], checkedTrades = [], lastLevel = -1, myLocalOwnedIds = [];
+        
+        let selectedMyCardId = null, selectedPartnerCardId = null, rawBoosterCardsGlobal = [];
+        let rewardModalInstance = null;
 
         window.addEventListener('DOMContentLoaded', fetchMembresPourListes);
 
@@ -263,7 +292,7 @@
             
             loginSelect.innerHTML = '<option value="">-- Choisis ton nom --</option>';
             assignSelect.innerHTML = '<option value="Tous">Tout le monde</option>';
-            targetTradeSelect.innerHTML = '<option value="">-- Choisis la cible --</option>';
+            targetTradeSelect.innerHTML = '<option value="">-- Choisis ton ami --</option>';
             
             membres.forEach(m => {
                 loginSelect.innerHTML += `<option value="${m}">${m}</option>`;
@@ -294,6 +323,8 @@
                         document.getElementById('displayUsername').innerText = currentUser.toUpperCase();
                         document.getElementById('admin-tab').style.display = (userRole === 'admin') ? 'block' : 'none';
 
+                        rewardModalInstance = new bootstrap.Modal(document.getElementById('rewardModal'));
+
                         setInterval(checkRealtimeUpdate, 4000);
                         checkRealtimeUpdate();
                     } else {
@@ -311,7 +342,8 @@
                         currentLocalState = state.stateUpdate;
                         idMembreSession = state.idMembre;
 
-                        if (lastLevel !== -1 && state.niveau > lastLevel) {
+                        // SÉCURITÉ ANTI-DOUBLE GAIN : Seuls les vrais profils enfants piochent localement lors d'un level up direct
+                        if (userRole === 'joueur' && lastLevel !== -1 && state.niveau > lastLevel) {
                             await piocherUneCarteTCGEnLocal(state.niveau - lastLevel);
                         }
                         lastLevel = state.niveau;
@@ -350,11 +382,7 @@
 
                         if (isImageValid) {
                             success = true;
-                            cardData = {
-                                id: candidateId,
-                                name: "CARTE COMPAGNONS #" + rNum,
-                                img: imgUrl
-                            };
+                            cardData = { id: candidateId, name: "CARTE COMPAGNONS #" + rNum, img: imgUrl };
                             myLocalOwnedIds.push(candidateId);
                         }
                     }
@@ -387,92 +415,160 @@
 
         function actionTache(id, statut) { fetch(`${API_URL}?action=changerStatut&id=${id}&statut=${statut}`).then(() => checkRealtimeUpdate()); }
 
-        // LE MOTEUR DE TRI LOCAL ABSOLU ET TOUT-TERRAIN
         function fetchCollectionEtEchanges() {
             if (userRole === 'admin') return;
             fetch(`${API_URL}?action=getCollection&username=${encodeURIComponent(currentUser)}`)
                 .then(res => res.json())
-                .then(toutesLesCartesDuSheets => {
+                .then(toutesLesCartes => {
+                    rawBoosterCardsGlobal = toutesLesCartes;
                     const grid = document.getElementById('pokemonGrid');
-                    const select = document.getElementById('tradeMyCardSelect');
                     grid.innerHTML = ""; 
-                    select.innerHTML = "";
                     myLocalOwnedIds = [];
 
-                    if (!Array.isArray(toutesLesCartesDuSheets) || toutesLesCartesDuSheets.length === 0) {
-                        grid.innerHTML = `<div class="col-12 text-center py-5 text-muted fw-bold">Aucune carte... Complète tes tâches pour ouvrir ton premier booster ! 🏁</div>`;
-                        return;
-                    }
-
-                    // FILTRAGE LOCAL PARFAIT : On trie nous-mêmes la liste brute reçue du Sheets !
-                    const mesCartesFiltrees = toutesLesCartesDuSheets.filter(row => {
-                        let joueurDansLaFeuille = row.Nom_Joueur || row.Nom || row.nom || row.Joueur || row.joueur || row.NOM_JOUEUR || row.Assigne_A || "";
-                        return joueurDansLaFeuille.toString().toLowerCase() === currentUser.toLowerCase();
+                    const mesCartes = toutesLesCartes.filter(row => {
+                        let fUser = row.Nom_Joueur || row.Nom || row.nom || row.Joueur || row.joueur || row.NOM_JOUEUR || row.Assigne_A || "";
+                        return fUser.toString().toLowerCase() === currentUser.toLowerCase();
                     });
 
-                    mesCartesFiltrees.forEach(c => {
+                    mesCartes.forEach(c => {
                         let trueImg = c.Image_URL || c.Image || c.url || c.IMAGE_URL || c.image_url || c.image || "";
-                        let trueName = c.Nom_Pokemon || c.Nom || c.name || c.NOM_POKEMON || c.nom_pokemon || c.Description || "Carte Sans Nom";
-                        let trueId = c.Pokemon_API_ID || c.ID || c.id || c.POKEMON_API_ID || c.pokemon_api_id || c.ID_Piece || "ID_Inconnu";
+                        let trueId = c.Pokemon_API_ID || c.ID || c.id || c.POKEMON_API_ID || c.pokemon_api_id || c.ID_Piece || "ID";
 
-                        if (trueImg) {
-                            myLocalOwnedIds.push(String(trueId));
-                            grid.innerHTML += `
-                                <div class="col text-center">
-                                    <div class="pokemon-card-wrapper animate__animated animate__fadeIn">
-                                        <img src="${trueImg}" class="pokemon-card-img" alt="Carte Pokemon">
-                                        <p class="mt-2 text-warning font-weight-bold brawl-font mb-0 text-center" style="font-size:0.95rem; -webkit-text-stroke: 1px #000;">${trueName}</p>
-                                    </div>
-                                </div>`;
-                            select.innerHTML += `<option value="${trueId}">${trueName}</option>`;
-                        }
+                        myLocalOwnedIds.push(String(trueId));
+                        grid.innerHTML += `
+                            <div class="col text-center">
+                                <div class="pokemon-card-wrapper animate__animated animate__fadeIn">
+                                    <img src="${trueImg}" class="pokemon-card-img" alt="Carte">
+                                </div>
+                            </div>`;
                     });
 
-                    if (grid.innerHTML.trim() === "") {
+                    if (grid.innerHTML === "") {
                         grid.innerHTML = `<div class="col-12 text-center py-5 text-muted fw-bold">Aucune carte... Complète tes tâches pour ouvrir ton premier booster ! 🏁</div>`;
                     }
-                }).catch(err => {
-                    console.error("Erreur d'affichage galerie locale: ", err);
                 });
 
             fetch(`${API_URL}?action=getEchanges&username=${encodeURIComponent(currentUser)}`).then(res => res.json()).then(echanges => {
                 const list = document.getElementById('echangesList'); list.innerHTML = "";
                 echanges.forEach(ex => {
                     let badgeColor = ex.Statut === 'en_attente' ? 'bg-warning text-dark' : (ex.Statut === 'accepte' ? 'bg-success' : 'bg-danger');
-                    list.innerHTML += `<div class="alert alert-secondary d-flex justify-content-between align-items-center"><span>De <b>${ex.Demandeur}</b> à <b>${ex.Receveur}</b> (Carte ID: ${ex.Carte_Offerte_ID})</span> <span class="badge ${badgeColor}">${ex.Statut.toUpperCase()}</span></div>`;
-                    if (ex.Receveur === currentUser && ex.Statut === 'en_attente' && !checkedTrades.includes(ex.ID_Echange)) { checkedTrades.push(ex.ID_Echange); ouvrirLiveModalEchange(ex); }
-                    if (ex.Demandeur === currentUser && ex.Statut === 'refuse' && !checkedTrades.includes(ex.ID_Echange)) { checkedTrades.push(ex.ID_Echange); alert(`🚨 Offre d'échange refusée par ${ex.Receveur} !`); }
+                    list.innerHTML += `<div class="alert alert-secondary d-flex justify-content-between align-items-center bg-dark/50 border-secondary text-white"><span>De <b>${ex.Demandeur}</b> à <b>${ex.Receveur}</b> (Offre: ${ex.Carte_Offerte_ID} vs Demande: ${ex.Carte_Demandee_ID || 'Aucune'})</span> <span class="badge ${badgeColor}">${ex.Statut.toUpperCase()}</span></div>`;
+                    
+                    if (ex.Receveur === currentUser && ex.Statut === 'en_attente' && !checkedTrades.includes(ex.ID_Echange)) { 
+                        checkedTrades.push(ex.ID_Echange); 
+                        ouvrirLiveModalEchange(ex); 
+                    }
                 });
             });
         }
 
+        function initArenaEchanges() {
+            selectedMyCardId = null;
+            selectedPartnerCardId = null;
+            document.getElementById('partnerTradeZone').innerHTML = `<div class="col-12 text-center text-muted py-5">Sélectionne un ami en haut pour scanner ses cartes.</div>`;
+            renderMyTradeZone();
+        }
+
+        function renderMyTradeZone() {
+            const container = document.getElementById('myTradeZone');
+            container.innerHTML = "";
+
+            const mesCartes = rawBoosterCardsGlobal.filter(row => {
+                let fUser = row.Nom_Joueur || row.Nom || row.nom || row.Joueur || row.joueur || row.NOM_JOUEUR || row.Assigne_A || "";
+                return fUser.toString().toLowerCase() === currentUser.toLowerCase();
+            });
+
+            mesCartes.forEach(c => {
+                let trueImg = c.Image_URL || c.Image || c.url || c.IMAGE_URL || c.image_url || c.image || "";
+                let trueId = c.Pokemon_API_ID || c.ID || c.id || c.POKEMON_API_ID || c.pokemon_api_id || c.ID_Piece || "ID";
+                let isSel = selectedMyCardId === trueId ? 'selected' : '';
+
+                container.innerHTML += `
+                    <div class="col">
+                        <div class="pokemon-card-wrapper ${isSel}" onclick="selectMyCardForTrade('${trueId}')">
+                            <img src="${trueImg}" class="pokemon-card-img">
+                        </div>
+                    </div>`;
+            });
+        }
+
+        // FIX SÉLECTION PARTENAIRE : Mise à jour de la fonction onclick locale
+        function loadPartnerCollectionForTrade() {
+            const targetFriend = document.getElementById('tradeTargetSelect').value;
+            const container = document.getElementById('partnerTradeZone');
+            container.innerHTML = "";
+
+            if (!targetFriend) {
+                container.innerHTML = `<div class="col-12 text-center text-muted py-5">Sélectionne un ami en haut pour scanner ses cartes.</div>`;
+                return;
+            }
+
+            const sesCartes = rawBoosterCardsGlobal.filter(row => {
+                let fUser = row.Nom_Joueur || row.Nom || row.nom || row.Joueur || row.joueur || row.NOM_JOUEUR || row.Assigne_A || "";
+                return fUser.toString().toLowerCase() === targetFriend.toLowerCase();
+            });
+
+            sesCartes.forEach(c => {
+                let trueImg = c.Image_URL || c.Image || c.url || c.IMAGE_URL || c.image_url || c.image || "";
+                let trueId = c.Pokemon_API_ID || c.ID || c.id || c.POKEMON_API_ID || c.pokemon_api_id || c.ID_Piece || "ID";
+                let isSel = selectedPartnerCardId === trueId ? 'selected' : '';
+
+                container.innerHTML += `
+                    <div class="col">
+                        <div class="pokemon-card-wrapper ${isSel}" onclick="selectPartnerCardForTrade('${trueId}')">
+                            <img src="${trueImg}" class="pokemon-card-img">
+                        </div>
+                    </div>`;
+            });
+
+            if(sesCartes.length === 0) {
+                container.innerHTML = `<div class="col-12 text-center text-muted py-5">Cet ami n'a pas encore de cartes à échanger.</div>`;
+            }
+        }
+
+        function selectMyCardForTrade(id) { selectedMyCardId = id; renderMyTradeZone(); }
+        function selectPartnerCardForTrade(id) { selectedPartnerCardId = id; loadPartnerCollectionForTrade(); }
+
+        function proposerEchange() {
+            const cible = document.getElementById('tradeTargetSelect').value;
+            if (!cible || !selectedMyCardId || !selectedPartnerCardId) {
+                return alert("⚠️ Configuration incomplète ! Tu dois sélectionner un ami, UNE de tes cartes et UNE de ses cartes pour lancer le deal !");
+            }
+            fetch(`${API_URL}?action=creerEchange&demandeur=${encodeURIComponent(currentUser)}&receveur=${encodeURIComponent(cible)}&maCarteId=${selectedMyCardId}&saCarteId=${selectedPartnerCardId}`)
+                .then(() => { 
+                    alert("🚀 Proposition d'échange envoyée en direct !"); 
+                    initArenaEchanges();
+                    checkRealtimeUpdate(); 
+                });
+        }
+
         function ouvrirLiveModalEchange(trade) {
-            document.getElementById('tradeDecisionText').innerText = `${trade.Demandeur} te propose un échange en direct ! Il souhaite acquérir une de tes cartes. Acceptes-tu l'échange ?`;
+            document.getElementById('tradeDecisionText').innerText = `${trade.Demandeur} veut faire un échange ! Il t'offre sa carte [ID: ${trade.Carte_Offerte_ID}] en échange de ta carte [ID: ${trade.Carte_Demandee_ID}]. Acceptes-tu ?`;
             const m = new bootstrap.Modal(document.getElementById('tradeDecisionModal'));
             document.getElementById('btnAcceptTrade').onclick = () => repondreAuDeal(trade.ID_Echange, 'accepte', m);
             document.getElementById('btnRefuseTrade').onclick = () => repondreAuDeal(trade.ID_Echange, 'refuse', m);
             m.show();
         }
 
-        function repondreAuDeal(id, dec, instance) { fetch(`${API_URL}?action=repondreEchange&id=${id}&statut=${dec}`).then(() => { instance.hide(); checkRealtimeUpdate(); }); }
-        
-        function proposerEchange() {
-            const cible = document.getElementById('tradeTargetSelect').value, maCarte = document.getElementById('tradeMyCardSelect').value;
-            if (!cible || !maCarte) return alert("Assure-toi de choisir un joueur ET une carte à offrir !");
-            fetch(`${API_URL}?action=creerEchange&demandeur=${encodeURIComponent(currentUser)}&receveur=${encodeURIComponent(cible)}&maCarte=${maCarte}`).then(() => { alert("Proposition envoyée !"); checkRealtimeUpdate(); });
+        function repondreAuDeal(id, dec, instance) { 
+            fetch(`${API_URL}?action=repondreEchange&id=${id}&statut=${dec}`).then(() => { 
+                instance.hide(); 
+                checkRealtimeUpdate(); 
+            }); 
         }
 
         function showNextRewardCard() {
-            if (pendingCards.length === 0) { bootstrap.Modal.getInstance(document.getElementById('rewardModal')).hide(); return; }
+            if (pendingCards.length === 0) { 
+                rewardModalInstance.hide();
+                return; 
+            }
             const c = pendingCards.shift();
             
-            let trueImg = c.Image_URL || c.Image || c.url || c.IMAGE_URL || c.image_url || c.image;
-            let trueName = c.Nom_Pokemon || c.Nom || c.name || c.NOM_POKEMON || c.nom_pokemon || c.Description;
-
-            document.getElementById('rewardCardImg').src = trueImg;
-            document.getElementById('rewardCardName').innerText = trueName.toUpperCase();
-            document.getElementById('rewardNextBtn').innerText = pendingCards.length > 0 ? "SUIVANT !" : "FERMER !";
-            new bootstrap.Modal(document.getElementById('rewardModal')).show();
+            document.getElementById('rewardCardImg').src = c.Image_URL;
+            document.getElementById('rewardCardName').innerText = "NOUVELLE CARTE !";
+            document.getElementById('rewardNextBtn').innerText = pendingCards.length > 0 ? "SUIVANT ! 🔥" : "FERMER ! 🕹️";
+            
+            rewardModalInstance.show();
         }
 
         function nextRewardCard() { showNextRewardCard(); }
