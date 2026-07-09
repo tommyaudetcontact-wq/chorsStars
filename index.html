@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Brawl Tasks - Pokémon TCG Edition</title>
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -123,7 +122,6 @@
 </head>
 <body>
 
-    <!-- CONNEXION -->
     <div id="loginPage" class="container">
         <div class="login-container p-5 text-center animate__animated animate__zoomIn">
             <h1 class="brawl-font text-warning mb-2" style="font-size: 3.5rem;">BRAWL TASKS</h1>
@@ -143,7 +141,6 @@
         </div>
     </div>
 
-    <!-- APP DASHBOARD -->
     <div id="appPage" class="container py-4 d-none">
         <div class="brawl-card p-4 animate__animated animate__fadeInDown">
             <div class="row align-items-center">
@@ -173,7 +170,6 @@
             <div class="tab-pane fade show active" id="tachesTab"><div id="tachesList" class="row g-3"></div></div>
             <div class="tab-pane fade" id="collectionTab"><div id="pokemonGrid" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-5 g-4"></div></div>
 
-            <!-- ARÈNE D'ÉCHANGES -->
             <div class="tab-pane fade" id="echangesTab">
                 <div class="brawl-card p-4">
                     <h3 class="brawl-font text-warning mb-3">🔥 LE DUEL DE CARTES COIN POKÉMON</h3>
@@ -188,12 +184,10 @@
                     </div>
 
                     <div class="row g-4">
-                        <!-- Ma collection -->
                         <div class="col-md-6">
                             <h4 class="brawl-font text-center text-success mb-2">MES CARTES (À OFFRIR)</h4>
                             <div id="myTradeZone" class="row row-cols-2 row-cols-lg-3 g-2 trade-zone"></div>
                         </div>
-                        <!-- Sa collection -->
                         <div class="col-md-6">
                             <h4 class="brawl-font text-center text-danger mb-2">SES CARTES (À RECEVOIR)</h4>
                             <div id="partnerTradeZone" class="row row-cols-2 row-cols-lg-3 g-2 trade-zone">
@@ -208,7 +202,6 @@
                 </div>
             </div>
 
-            <!-- PANEL ADMIN -->
             <div class="tab-pane fade" id="adminTab">
                 <div class="row g-4">
                     <div class="col-md-6">
@@ -235,7 +228,6 @@
         </div>
     </div>
 
-    <!-- MODALS -->
     <div class="modal fade pokemon-modal" id="rewardModal" data-bs-backdrop="static" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content p-4 text-center animate__animated animate__jackInTheBox">
@@ -251,13 +243,32 @@
     </div>
 
     <div class="modal fade" id="tradeDecisionModal" data-bs-backdrop="static" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content bg-dark border-light p-4 text-center text-white" style="border-radius:20px;">
-                <h2 class="brawl-font text-info mb-3">DEMANDE D'ÉCHANGE !</h2>
-                <p id="tradeDecisionText" class="fs-5"></p>
-                <div class="d-flex gap-3 justify-content-center mt-4">
-                    <button id="btnAcceptTrade" class="btn brawl-btn btn-green px-4">ACCEPTER</button>
-                    <button id="btnRefuseTrade" class="btn brawl-btn btn-pink px-4">REFUSER</button>
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-dark border-warning p-4 text-center text-white" style="border-radius:25px; border: 4px solid var(--brawl-yellow);">
+                <h2 class="brawl-font text-warning mb-2 animate__animated animate__pulse animate__infinite" style="font-size:2.2rem;">DEMANDE D'ÉCHANGE EN DIRECT !</h2>
+                <p id="tradeDecisionText" class="fs-5 mb-4 text-light"></p>
+                
+                <div class="row g-4 justify-content-center align-items-center mb-4">
+                    <div class="col-5 text-center">
+                        <h5 class="brawl-font text-danger mb-2" style="font-size:1.1rem;">Ma Carte :</h5>
+                        <div class="pokemon-card-wrapper p-2" style="cursor:default; max-width:180px; margin:0 auto;">
+                            <img id="decisionMyCardImg" src="" class="w-100 rounded-3">
+                        </div>
+                    </div>
+                    <div class="col-2 text-center px-0">
+                        <span class="brawl-font text-warning fs-1 d-block animate__animated animate__rubberBand">VS</span>
+                    </div>
+                    <div class="col-5 text-center">
+                        <h5 class="brawl-font text-success mb-2" style="font-size:1.1rem;">Sa Carte :</h5>
+                        <div class="pokemon-card-wrapper p-2" style="cursor:default; max-width:180px; margin:0 auto;">
+                            <img id="decisionPartnerCardImg" src="" class="w-100 rounded-3">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-4 justify-content-center mt-2">
+                    <button id="btnAcceptTrade" class="btn brawl-btn btn-green px-5 py-2 fs-5">ACCEPTER ✅</button>
+                    <button id="btnRefuseTrade" class="btn brawl-btn btn-pink px-5 py-2 fs-5">REFUSER ❌</button>
                 </div>
             </div>
         </div>
@@ -342,7 +353,6 @@
                         currentLocalState = state.stateUpdate;
                         idMembreSession = state.idMembre;
 
-                        // SÉCURITÉ ANTI-DOUBLE GAIN : Seuls les vrais profils enfants piochent localement lors d'un level up direct
                         if (userRole === 'joueur' && lastLevel !== -1 && state.niveau > lastLevel) {
                             await piocherUneCarteTCGEnLocal(state.niveau - lastLevel);
                         }
@@ -492,7 +502,6 @@
             });
         }
 
-        // FIX SÉLECTION PARTENAIRE : Mise à jour de la fonction onclick locale
         function loadPartnerCollectionForTrade() {
             const targetFriend = document.getElementById('tradeTargetSelect').value;
             const container = document.getElementById('partnerTradeZone');
@@ -542,8 +551,26 @@
                 });
         }
 
+        // RECHERCHE VISUELLE DYNAMIQUE DES CARTES POUR AFFICHAGE DANS LE MODAL
         function ouvrirLiveModalEchange(trade) {
-            document.getElementById('tradeDecisionText').innerText = `${trade.Demandeur} veut faire un échange ! Il t'offre sa carte [ID: ${trade.Carte_Offerte_ID}] en échange de ta carte [ID: ${trade.Carte_Demandee_ID}]. Acceptes-tu ?`;
+            document.getElementById('tradeDecisionText').innerText = `${trade.Demandeur} te propose un deal ! Il t'offre sa carte en échange de la tienne.`;
+            
+            // On cherche l'image de la carte du demandeur (l'offre que je reçois)
+            let carteOfferteObj = rawBoosterCardsGlobal.find(c => {
+                let trueId = c.Pokemon_API_ID || c.ID || c.id || c.ID_Piece || "";
+                return trueId.toString() === trade.Carte_Offerte_ID.toString();
+            });
+            
+            // On cherche l'image de ma propre carte (celle qu'il me demande)
+            let carteDemandeeObj = rawBoosterCardsGlobal.find(c => {
+                let trueId = c.Pokemon_API_ID || c.ID || c.id || c.ID_Piece || "";
+                return trueId.toString() === trade.Carte_Demandee_ID.toString();
+            });
+
+            // Injection des liens d'images trouvés dans le Sheets, avec Pokéball par défaut si introuvable
+            document.getElementById('decisionPartnerCardImg').src = carteOfferteObj ? (carteOfferteObj.Image_URL || carteOfferteObj.Image || carteOfferteObj.url) : 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
+            document.getElementById('decisionMyCardImg').src = carteDemandeeObj ? (carteDemandeeObj.Image_URL || carteDemandeeObj.Image || carteDemandeeObj.url) : 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
+
             const m = new bootstrap.Modal(document.getElementById('tradeDecisionModal'));
             document.getElementById('btnAcceptTrade').onclick = () => repondreAuDeal(trade.ID_Echange, 'accepte', m);
             document.getElementById('btnRefuseTrade').onclick = () => repondreAuDeal(trade.ID_Echange, 'refuse', m);
