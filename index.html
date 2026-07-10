@@ -212,8 +212,8 @@
                         <h3 class="brawl-font text-warning mb-3">Donner une Mission</h3>
                         <div class="mb-3"><label class="form-label">Quoi faire ?</label><input type="text" id="taskDesc" class="form-control bg-dark text-white border-secondary"></div>
                         <div class="row mb-3">
-                            <div class="col"><label class="form-label">XP</label><input type="number" id="taskXp" class="form-control bg-dark text-white border-secondary" value="100"></div>
-                            <div class="col"><label class="form-label">Argent ($)</label><input type="number" step="0.05" id="taskMoney" class="form-control bg-dark text-white border-secondary" value="0"></div>
+                            <div class="col"><label class="form-label">XP</label><input type="number" id="taskXp" class="form-control bg-dark text-white border-secondary" value="30"></div>
+                            <div class="col"><label class="form-label">Argent ($)</label><input type="number" step="0.05" id="taskMoney" class="form-control bg-dark text-white border-secondary" value="0.50"></div>
                         </div>
                         <div class="mb-4"><label class="form-label">Pour qui ?</label><select id="taskAssignSelect" class="form-select bg-dark text-white border-secondary"></select></div>
                         <button onclick="creerNouvelleTache()" class="btn brawl-btn btn-orange w-100">Lancer la tâche !</button>
@@ -290,6 +290,7 @@
         let pendingCards = [], checkedTrades = [], lastLevel = -1, myLocalOwnedIds = [];
         let selectedMyCardId = null, selectedPartnerCardId = null, rawBoosterCardsGlobal = [];
         let rewardModalInstance = null, fullMembresListGlobal = [];
+        let isDrawingProcessActive = false; 
 
         window.addEventListener('DOMContentLoaded', fetchMembresPourListes);
 
@@ -392,11 +393,13 @@
                             
                             if (storedLevel !== null) {
                                 let oldLevel = parseInt(storedLevel);
-                                if (state.niveau > oldLevel) {
+                                if (state.niveau > oldLevel && !isDrawingProcessActive) {
+                                    localStorage.setItem(key, state.niveau);
                                     await piocherUneCarteTCGEnLocal(state.niveau - oldLevel);
                                 }
+                            } else {
+                                localStorage.setItem(key, state.niveau);
                             }
-                            localStorage.setItem(key, state.niveau);
                         }
 
                         document.getElementById('displayLevel').innerText = "NIVEAU " + state.niveau;
@@ -404,13 +407,20 @@
                         document.getElementById('xpBar').style.width = Math.min(100, state.xp) + "%";
                         document.getElementById('xpText').innerText = state.xp + " / 100 XP";
                         
-                        fetch(`${API_URL}?action=getTaches&username=${encodeURIComponent(currentUser)}&role=${userRole}`).then(res => res.json()).then(renderTaches);
+                        chargerEtAfficherTaches();
                         fetchCollectionEtEchanges();
                     }
                 });
         }
 
+        function chargerEtAfficherTaches() {
+            fetch(`${API_URL}?action=getTaches&username=${encodeURIComponent(currentUser)}&role=${userRole}`)
+                .then(res => res.json())
+                .then(renderTaches);
+        }
+
         async function piocherUneCarteTCGEnLocal(nbNiveauxGagnes) {
+            isDrawingProcessActive = true;
             let cardsToOpen = [];
             for (let k = 0; k < nbNiveauxGagnes; k++) {
                 let success = false;
@@ -438,13 +448,22 @@
                     cardsToOpen.push({ Nom_Pokemon: cardData.name, Image_URL: cardData.img });
                 }
             }
-            if (cardsToOpen.length > 0) { pendingCards = cardsToOpen; showNextRewardCard(); }
+            if (cardsToOpen.length > 0) { 
+                pendingCards = [...pendingCards, ...cardsToOpen]; 
+                showNextRewardCard(); 
+            }
+            isDrawingProcessActive = false;
         }
 
         function renderTaches(taches) {
             const container = document.getElementById('tachesList');
             container.innerHTML = "";
             taches.forEach(t => {
+                // CORRECTIF ABSOLU : Si l'admin regarde et que c'est approuvé, on zappe COMPLETEMENT la création du bloc HTML
+                if (userRole === 'admin' && t.Statut === 'approuve') {
+                    return; 
+                }
+
                 let badgeColor = t.Statut === 'a faire' ? 'bg-danger' : (t.Statut === 'termine' ? 'bg-warning text-dark' : 'bg-success');
                 let actionBtn = "";
                 if (t.Statut === 'a faire' && userRole === 'joueur') actionBtn = `<button onclick="actionTache('${t.ID_Tache}', 'termine')" class="btn brawl-btn btn-green w-100 mt-2">C'EST FAIT !</button>`;
@@ -452,9 +471,19 @@
 
                 container.innerHTML += `<div class="col-md-6 col-lg-4 animate__animated animate__fadeInUp"><div class="brawl-card p-3"><div class="d-flex justify-content-between align-items-start mb-2"><span class="badge ${badgeColor} brawl-font">${t.Statut.toUpperCase()}</span><div><span class="badge badge-xp brawl-badge me-1 text-white-forced">+${t.Recompense_XP} XP</span><span class="badge badge-money brawl-badge">+${parseFloat(t.Recompense_Argent).toFixed(2)}$</span></div></div><h4 class="fw-bold my-3 text-light">${t.Description}</h4><small class="text-muted d-block mb-1">Pour : <strong>${t.Assigne_A}</strong></small>${actionBtn}</div></div>`;
             });
+            
+            if (container.innerHTML === "") {
+                container.innerHTML = `<div class="col-12 text-center py-5 text-muted fw-bold">Aucune tâche en cours pour le moment ! 🎉</div>`;
+            }
         }
 
-        function actionTache(id, statut) { fetch(`${API_URL}?action=changerStatut&id=${id}&statut=${statut}`).then(() => checkRealtimeUpdate()); }
+        // MODIFICATION ICI : On recharge immédiatement les tâches après le clic pour un effet visuel instantané
+        function actionTache(id, statut) { 
+            fetch(`${API_URL}?action=changerStatut&id=${id}&statut=${statut}`)
+                .then(() => {
+                    chargerEtAfficherTaches(); // Met à jour l'écran immédiatement !
+                }); 
+        }
 
         function fetchCollectionEtEchanges() {
             if (userRole === 'admin') return;
@@ -567,7 +596,7 @@
         function nextRewardCard() { showNextRewardCard(); }
         function creerNouvelleTache() {
             const desc = document.getElementById('taskDesc').value, xp = document.getElementById('taskXp').value, money = document.getElementById('taskMoney').value, assign = document.getElementById('taskAssignSelect').value;
-            fetch(`${API_URL}?action=ajouterTache&desc=${encodeURIComponent(desc)}&xp=${xp}&money=${money}&assign=${encodeURIComponent(assign)}`).then(() => { alert("Mission lancée !"); document.getElementById('taskDesc').value = ""; checkRealtimeUpdate(); });
+            fetch(`${API_URL}?action=ajouterTache&desc=${encodeURIComponent(desc)}&xp=${xp}&money=${money}&assign=${encodeURIComponent(assign)}`).then(() => { alert("Mission lancée !"); document.getElementById('taskDesc').value = ""; chargerEtAfficherTaches(); });
         }
         function creerMembreAdmin() {
             const nom = document.getElementById('newMemberName').value; if(!nom) return;
